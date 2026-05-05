@@ -18,6 +18,7 @@ class AgentResult:
     duration_seconds: float = 0.0
     success: bool = True
     error: str | None = None
+    trace_path: str | None = None  # Path to HTML trace (if Agent has trace_dir set)
 
     def summary(self) -> str:
         """Short human-readable summary line."""

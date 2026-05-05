@@ -26,13 +26,14 @@ def _format_step(step) -> Text:
     return text
 
 
-async def _run(request: str, workspace: Path, verbose: bool) -> int:
+async def _run(request: str, workspace: Path, verbose: bool, trace_dir: Path | None) -> int:
     def on_step(step):
         console.print(_format_step(step))
 
     agent = ReproAgent(
         workspace_path=workspace,
         on_step=on_step if verbose else None,
+        trace_dir=trace_dir,
     )
 
     if not verbose:
@@ -48,6 +49,8 @@ async def _run(request: str, workspace: Path, verbose: bool) -> int:
         console.print(f"  • {f}")
     console.print()
     console.print(f"[dim]{result.summary()}[/]")
+    if result.trace_path:
+        console.print(f"[dim]Trace: {result.trace_path}[/]")
     return 0 if result.success else 1
 
 
@@ -68,12 +71,20 @@ def main() -> None:
 
     workspace = Path("./repro_workspace")
     verbose = False
+    trace_dir: Path | None = None
     request_parts = []
     i = 0
     while i < len(args):
         if args[i] == "--workspace" and i + 1 < len(args):
             workspace = Path(args[i + 1])
             i += 2
+        elif args[i] == "--trace":
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                trace_dir = Path(args[i + 1])
+                i += 2
+            else:
+                trace_dir = Path("./traces")
+                i += 1
         elif args[i] in ("--verbose", "-v"):
             verbose = True
             i += 1
@@ -86,7 +97,7 @@ def main() -> None:
         sys.exit(1)
 
     request = " ".join(request_parts)
-    sys.exit(asyncio.run(_run(request, workspace, verbose)))
+    sys.exit(asyncio.run(_run(request, workspace, verbose, trace_dir)))
 
 
 if __name__ == "__main__":

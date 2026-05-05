@@ -54,6 +54,7 @@ class ReproAgent:
         llm: LLMProvider | None = None,
         max_iterations: int = 40,
         on_step: callable = None,
+        trace_dir: str | Path | None = None,
     ):
         self.workspace_path = Path(workspace_path)
         tools, self.workspace = build_tools(self.workspace_path)
@@ -64,6 +65,7 @@ class ReproAgent:
             system_prompt=system_prompt,
             max_iterations=max_iterations,
             on_step=on_step,
+            trace_dir=trace_dir,
         )
 
     async def reproduce(self, request: str) -> AgentResult:

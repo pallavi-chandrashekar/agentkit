@@ -2,104 +2,69 @@
 
 **Production-grade AI agent framework with built-in observability and evaluation.**
 
+> Most agent libraries are toy demos or framework giants. AgentKit is the middle ground: small, opinionated, observable. Every step is traced, every LLM call is costed, every agent run is reproducible.
+
 ```bash
 pip install -e ".[all,dev]"
 export ANTHROPIC_API_KEY=sk-...
 
 python -m examples.data_assistant.seed_db
-data-assistant "What was our top product last month?"
+data-assistant --trace "What was our top product last month?"
 ```
 
 ```
 [task] What was our top product last month?
-[plan] I'll explore the schema, then write a query joining orders, order_items, and products.
-[act]  list_tables()
-[obs]  Tables: ['customers', 'order_items', 'orders', 'products']
-[act]  describe_table(table_name='orders')
-[obs]  orders (271 rows): id:INTEGER, customer_id:INTEGER, order_date:TEXT, status:TEXT
-[act]  describe_table(table_name='order_items')
-[obs]  order_items (561 rows): id:INTEGER, order_id:INTEGER, product_id:INTEGER, quantity:INTEGER, unit_price:REAL
-[act]  execute_sql(query='SELECT p.name, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue ...')
-[obs]  1 rows: [{'name': 'Annual Support', 'revenue': 28800.0}]
+[plan] I'll explore the schema, then write a query joining orders, items, products
+[act]  list_tables() → ['customers', 'order_items', 'orders', 'products']
+[act]  describe_table('orders')      → 253 rows, columns shown
+[act]  describe_table('order_items') → 506 rows, columns shown
+[act]  describe_table('products')    → 10 rows, columns shown
+[act]  execute_sql('SELECT p.name, SUM(oi.quantity * oi.unit_price) ...')
+[obs]  [{'name': 'Annual Support', 'revenue': 28800.0}]
 [ans]  The top product last month was 'Annual Support' with $28,800 in revenue.
 
 3 iter · 4 tools · $0.0124 · 6.4s · confidence: medium
+Trace: traces/run_1730900000.html
 ```
 
-## Why AgentKit
+Open the HTML trace in your browser — every step, every LLM call, every token cost, color-coded.
 
-Most "agent libraries" are either:
-- Toy demos (no eval, no cost tracking, brittle in production)
-- Framework giants (LangChain, etc. — too much abstraction, hard to debug)
+## What's different about AgentKit
 
-AgentKit is the middle ground. **Small, opinionated, observable.** Every step is traced. Every LLM call is costed. Every agent run is reproducible.
+| | Most agent libs | AgentKit |
+|---|---|---|
+| **Observability** | Print statements, or "plug in LangSmith" | Built-in. Every run produces JSONL + HTML viewer. |
+| **Cost tracking** | Manual | Built-in. Per-call tokens × current pricing. |
+| **Eval harness** | "We should add that" | Ships day 1. Run benchmarks, get success rate. |
+| **Multi-LLM** | Pick one and lock in | Claude / OpenAI / Gemini / Ollama, unified interface. |
+| **Lines of code** | 50,000+ | ~2,500. You can read it in an afternoon. |
+| **Lock-in** | Heavy | None. The framework gives you a loop; you keep your tools. |
 
-## Core design
+[Read the design doc →](docs/design.md)
 
-The agent loop is **Plan → Act → Observe → Reflect** with re-planning on failure:
+## Three reference implementations
 
-```
-User question
-  ↓
-[PLAN]   LLM proposes approach
-  ↓
-[ACT]    LLM picks a tool to call
-  ↓
-[OBSERVE] Tool runs, result fed back to LLM
-  ↓
-[REFLECT] Was that useful? Continue or replan
-  ↓ (loop until done)
-[ANSWER] Final response with confidence + cost + trace
-```
+Each demo proves the framework works on a different class of problem.
 
-This is the pattern used by Anthropic's Computer Use, Devin, and modern production agents. Vanilla ReAct doesn't handle multi-step reasoning well; pure Plan-Execute is brittle when reality differs from the plan.
-
-## Built-in primitives
-
-| Primitive | Purpose |
-|-----------|---------|
-| `Agent` | Plan-Act-Reflect loop |
-| `@tool` decorator | Async functions become LLM-callable tools (Pydantic-validated) |
-| `ToolRegistry` | Register, lookup, schema export |
-| `ConversationMemory` | Chat history with proper tool_use threading |
-| `WorkingMemory` | Scratchpad for intermediate observations |
-| `Tracer` | JSONL trace of every step (plan/act/obs/reflect/answer) |
-| `CostTracker` | Token + $ per LLM call, with current pricing for major models |
-| `EvalHarness` | Run agent across test cases, compute success rate / cost / latency |
-| `LLMProvider` | Multi-LLM (Claude, OpenAI, Gemini, Ollama) with native tool_use |
-
-## Reference implementations
-
-- **DataAssistant** (Week 1, this repo) — text-to-SQL agent
-- **PipelineDoctor** (Week 2, planned) — incident response for Airflow/Dagster
-- **ReproAgent** (Week 3, planned) — research paper reproduction
-
-Each demo is a thin shim: it wires AgentKit's core to domain-specific tools.
-
-## Installation
-
+### [DataAssistant](examples/data_assistant/README.md) — text-to-SQL
 ```bash
-git clone https://github.com/pallavi-chandrashekar/agentkit
-cd agentkit
-pip install -e ".[all,dev]"
+data-assistant "How many customers signed up in the last 30 days?"
 ```
+Explores DB schema, generates SQL, validates results, presents the answer.
 
-Requires Python 3.11+. The `[all]` extra installs OpenAI and Gemini SDKs (Anthropic is required); the `[dev]` extra adds pytest.
+### [PipelineDoctor](examples/pipeline_doctor/README.md) — incident response
+```bash
+pipeline-doctor "orders_etl pipeline failed at 03:17 UTC"
+```
+Reads logs + run history + source code → diagnoses root cause → proposes a code fix with diff.
 
-## LLM providers
+### [ReproAgent](examples/repro_agent/README.md) — research paper reproducer
+```bash
+repro-agent attention_is_all_you_need
+```
+Long-horizon: extracts claims, identifies methodology, writes a multi-file reproduction workspace (plan, claims, requirements, skeleton code).
 
-Auto-detected from environment variables:
-
-| Provider | Env Variable | Default Model |
-|----------|--------------|---------------|
-| Claude | `ANTHROPIC_API_KEY` | claude-sonnet-4-5-20250929 |
-| OpenAI | `OPENAI_API_KEY` | gpt-4o |
-| Gemini | `GOOGLE_API_KEY` | gemini-2.0-flash |
-| Ollama | (none) | llama3.1 (local) |
-
-Override with `AGENTKIT_LLM_PROVIDER` and `AGENTKIT_LLM_MODEL`.
-
-## Building your own agent
+## Build your own agent
 
 ```python
 import asyncio
@@ -116,18 +81,87 @@ async def calculate(expression: str) -> float:
     return eval(expression, {"__builtins__": {}}, {})
 
 async def main():
-    agent = Agent(tools=ToolRegistry([get_weather, calculate]))
+    agent = Agent(
+        tools=ToolRegistry([get_weather, calculate]),
+        trace_dir="./traces",          # Auto-write JSONL + HTML
+    )
     result = await agent.run("What's the temp in NYC plus 10?")
     print(result.answer)
-    print(result.summary())
+    print(result.summary())             # "3 iter · 2 tools · $0.0042 · 4.1s"
+    print(f"Trace: {result.trace_path}")
 
 asyncio.run(main())
 ```
 
+## The agent loop
+
+AgentKit uses **Plan → Act → Observe → Reflect** with re-planning, not vanilla ReAct. This is the pattern Anthropic's Computer Use, Devin, and other production agents use.
+
+[See `docs/design.md` for the full rationale](docs/design.md#the-agent-loop) — including why ReAct breaks down on multi-step reasoning and why pure Plan-Execute is brittle.
+
+## Observability that actually helps
+
+Every agent run can write a self-contained HTML trace:
+
+```bash
+data-assistant --trace "your question"
+# Trace: traces/run_1730900000.html
+```
+
+The trace shows:
+- Each step (color-coded by type: plan / action / observation / answer)
+- Tool calls with arguments and results
+- LLM calls with model, tokens in/out, latency
+- A summary header with total tokens, total cost, total time
+
+Standalone HTML — no server, no JS framework, no external dependencies. Share via Slack/Notion, attach to a PR, post to GitHub Gist.
+
+To render an existing trace:
+```bash
+agentkit-trace traces/run_1730900000.jsonl --out report.html
+```
+
+## LLM providers
+
+Auto-detected from environment variables:
+
+| Provider | Env Variable | Default Model |
+|----------|--------------|---------------|
+| Claude | `ANTHROPIC_API_KEY` | claude-sonnet-4-5-20250929 |
+| OpenAI | `OPENAI_API_KEY` | gpt-4o |
+| Gemini | `GOOGLE_API_KEY` | gemini-2.0-flash |
+| Ollama | (none) | llama3.1 (local) |
+
+Override with `AGENTKIT_LLM_PROVIDER` and `AGENTKIT_LLM_MODEL`.
+
+## Evaluation
+
+```python
+from agentkit.eval import EvalHarness, EvalCase, compute_metrics
+
+harness = EvalHarness(agent_factory=lambda: my_agent_factory())
+results = await harness.run([
+    EvalCase(id="t1", task="What is the capital of France?", expected="Paris"),
+    EvalCase(id="t2", task="Compute 17 * 23", grader=lambda r: "391" in r.answer),
+])
+metrics = compute_metrics(results)
+# {'success_rate': 1.0, 'avg_iterations': 2.5, 'avg_cost_usd': 0.008, ...}
+```
+
+## Installation
+
+```bash
+git clone https://github.com/pallavi-chandrashekar/agentkit
+cd agentkit
+pip install -e ".[all,dev]"
+```
+
+Requires Python 3.11+. The `[all]` extra installs OpenAI and Gemini SDKs (Anthropic is required); `[dev]` adds pytest.
+
 ## Testing
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v   # 82 tests
 ```
 
 ## License

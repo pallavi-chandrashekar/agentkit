@@ -1,6 +1,7 @@
 """pipeline-doctor CLI."""
 import asyncio
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.text import Text
@@ -25,13 +26,14 @@ def _format_step(step) -> Text:
     return text
 
 
-async def _run(alert: str, scenario: str, verbose: bool) -> int:
+async def _run(alert: str, scenario: str, verbose: bool, trace_dir: Path | None) -> int:
     def on_step(step):
         console.print(_format_step(step))
 
     doctor = PipelineDoctor(
         scenario=scenario,
         on_step=on_step if verbose else None,
+        trace_dir=trace_dir,
     )
 
     if not verbose:
@@ -43,6 +45,8 @@ async def _run(alert: str, scenario: str, verbose: bool) -> int:
     console.print(result.answer)
     console.print()
     console.print(f"[dim]{result.summary()}[/]")
+    if result.trace_path:
+        console.print(f"[dim]Trace: {result.trace_path}[/]")
     return 0 if result.success else 1
 
 
@@ -62,6 +66,7 @@ def main() -> None:
 
     scenario = "schema_drift"
     verbose = False
+    trace_dir: Path | None = None
     alert_parts = []
     i = 0
     while i < len(args):
@@ -72,6 +77,13 @@ def main() -> None:
                 console.print(f"Available: {list(SCENARIOS.keys())}")
                 sys.exit(1)
             i += 2
+        elif args[i] == "--trace":
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                trace_dir = Path(args[i + 1])
+                i += 2
+            else:
+                trace_dir = Path("./traces")
+                i += 1
         elif args[i] in ("--verbose", "-v"):
             verbose = True
             i += 1
@@ -86,7 +98,7 @@ def main() -> None:
         alert_parts = [f"{first_dag} pipeline failed. Investigate and propose a fix."]
 
     alert = " ".join(alert_parts)
-    sys.exit(asyncio.run(_run(alert, scenario, verbose)))
+    sys.exit(asyncio.run(_run(alert, scenario, verbose, trace_dir)))
 
 
 if __name__ == "__main__":

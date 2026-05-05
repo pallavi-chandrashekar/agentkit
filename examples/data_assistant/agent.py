@@ -36,6 +36,7 @@ class DataAssistant:
         llm: LLMProvider | None = None,
         max_iterations: int = 12,
         on_step: callable = None,
+        trace_dir: str | Path | None = None,
     ):
         self.db_path = Path(db_path)
         if not self.db_path.exists():
@@ -53,6 +54,7 @@ class DataAssistant:
             system_prompt=system_prompt,
             max_iterations=max_iterations,
             on_step=on_step,
+            trace_dir=trace_dir,
         )
 
     async def ask(self, question: str) -> AgentResult:

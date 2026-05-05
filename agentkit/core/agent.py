@@ -8,6 +8,7 @@ The agent is the main entry point. It composes:
 - A cost tracker (for $ accounting)
 """
 import time
+from pathlib import Path
 
 from agentkit.core.result import AgentResult
 from agentkit.core.step import Step
@@ -17,6 +18,7 @@ from agentkit.memory.conversation import ConversationMemory
 from agentkit.memory.working import WorkingMemory
 from agentkit.observability.cost import CostTracker
 from agentkit.observability.tracer import Tracer
+from agentkit.observability.viewer import render_tracer_html
 from agentkit.prompts.system import build_system_prompt
 from agentkit.tools.base import ToolError
 from agentkit.tools.registry import ToolRegistry
@@ -32,12 +34,24 @@ class Agent:
         system_prompt: str | None = None,
         max_iterations: int = 15,
         on_step: callable = None,
+        trace_dir: str | Path | None = None,
     ):
+        """
+        Args:
+            tools: Tool registry the agent can use.
+            llm: LLM provider (auto-detected from env if None).
+            system_prompt: System prompt (default built from tool names).
+            max_iterations: Hard cap on agent loop iterations.
+            on_step: Optional callback fired for each Step (for streaming).
+            trace_dir: If set, JSONL + HTML traces are written here on each run.
+                       Pass `None` to disable, or a path like "./traces".
+        """
         self.tools = tools
         self.llm = llm or create_llm_client()
         self.system_prompt = system_prompt or build_system_prompt(tools.names())
         self.max_iterations = max_iterations
-        self.on_step = on_step  # callback(Step) for streaming
+        self.on_step = on_step
+        self.trace_dir = Path(trace_dir) if trace_dir else None
 
         self.conversation = ConversationMemory()
         self.working = WorkingMemory()
@@ -175,6 +189,20 @@ class Agent:
             error=error,
         )
         self.tracer.record("task_end", {"success": success, "duration_seconds": duration})
+
+        if self.trace_dir:
+            try:
+                jsonl_path = self.trace_dir / f"{self.tracer.run_id}.jsonl"
+                self.tracer.write_jsonl(jsonl_path)
+                html_path = self.trace_dir / f"{self.tracer.run_id}.html"
+                render_tracer_html(self.tracer, html_path, title=f"Agent: {task[:60]}")
+                # Also write/symlink "latest" for convenience
+                latest_html = self.trace_dir / "latest.html"
+                latest_html.write_text(html_path.read_text())
+                result.trace_path = str(html_path)
+            except Exception:
+                pass  # never let trace writing break the agent
+
         return result
 
     def _emit(self, step: Step) -> None:

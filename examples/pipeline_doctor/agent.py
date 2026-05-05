@@ -53,6 +53,7 @@ class PipelineDoctor:
         llm: LLMProvider | None = None,
         max_iterations: int = 15,
         on_step: callable = None,
+        trace_dir=None,
     ):
         self.backend = backend or MockPipelineBackend(scenario=scenario)
         tools = build_tools(self.backend)
@@ -63,6 +64,7 @@ class PipelineDoctor:
             system_prompt=system_prompt,
             max_iterations=max_iterations,
             on_step=on_step,
+            trace_dir=trace_dir,
         )
 
     async def diagnose(self, alert: str) -> AgentResult:
