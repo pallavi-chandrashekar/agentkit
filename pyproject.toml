@@ -30,6 +30,7 @@ dev = [
 
 [project.scripts]
 data-assistant = "examples.data_assistant.cli:main"
+pipeline-doctor = "examples.pipeline_doctor.cli:main"
 agentkit-eval = "agentkit.eval.cli:main"
 
 [project.urls]
