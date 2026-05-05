@@ -31,6 +31,7 @@ dev = [
 [project.scripts]
 data-assistant = "examples.data_assistant.cli:main"
 pipeline-doctor = "examples.pipeline_doctor.cli:main"
+repro-agent = "examples.repro_agent.cli:main"
 agentkit-eval = "agentkit.eval.cli:main"
 
 [project.urls]
@@ -38,6 +39,9 @@ Repository = "https://github.com/pallavi-chandrashekar/agentkit"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentkit", "examples"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples/repro_agent/papers" = "examples/repro_agent/papers"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
