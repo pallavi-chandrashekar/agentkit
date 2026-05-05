@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentkit"
+version = "0.1.0"
+description = "Production-grade AI agent framework with built-in observability and evaluation"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Pallavi Chandrashekar", email = "pallavi9964@gmail.com" }]
+requires-python = ">=3.11"
+keywords = ["ai", "agents", "llm", "agent-framework", "tool-use"]
+dependencies = [
+    "anthropic>=0.39.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+gemini = ["google-generativeai>=0.8.0"]
+all = ["openai>=1.0.0", "google-generativeai>=0.8.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+data-assistant = "examples.data_assistant.cli:main"
+agentkit-eval = "agentkit.eval.cli:main"
+
+[project.urls]
+Repository = "https://github.com/pallavi-chandrashekar/agentkit"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentkit", "examples"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
